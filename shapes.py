@@ -39,7 +39,7 @@ class Square(Shape):
     def __init__(self, x, y, r, color=(0,0,0)):
         Shape.__init__(self, x, y, color)
         self.r = r
-
+        
     def IsInside(self, x, y):
         r = self.r
         return (x >= self.x - r) and (x <= self.x + r) and (y >= self.y - r) and (y <= self.y + r)

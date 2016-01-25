@@ -5,25 +5,48 @@ import numpy
 import cairo
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
-import random
+from random import random as rand
 
 def GenerateRandomShape(min_radius, max_radius):
-    r = random.random() * (max_radius - min_radius) + min_radius
-    if random.random() < 0.1:
-        return Square(0, 0, r, (random.random(), random.random(), random.random()))
-    return Circle(0, 0, r, (random.random(), random.random(), random.random()))
+    """
+    Generates a random shape with uniformly distributed radius in the range of
+    min radius and max radius.
+    
+    Args:
+      min_radius: the minimum radius of hte shape.
+      max_radius: the maximum radius of the shape.
+    
+    Returns:
+      A random shape.
+    """
+    r = rand() * (max_radius - min_radius) + min_radius
+    if rand() < 1.0:
+        return Square(0, 0, r, (rand(), rand(), rand()))
+    return Circle(0, 0, r, (rand(), rand(), rand()))
+
 
 def FindLocation(mask, shape, min_overlap_ratio=0.97):
+    """
+    Finds a location to place the shape using the mask as the valid regions.
+    
+    Args:
+      mask: the input mask (2d binary image)
+      shape: the shape that we wish to place.
+      min_overlap_ratio: the minimum overlap ratio of the shape with the mask.
+    
+    Returns:
+      A pair of integers (the location), or None if there is no more space.
+    """
     locations = []
     bb = shape.GetBoundingBox()
     checked = 0
     h = len(mask)
     w = len(mask[0])
-    x0 = int(random.random() * 2)
-    y0 = int(random.random() * 2)
+    x0 = int(rand() * 2)
+    y0 = int(rand() * 2)
     
-    for y in xrange(x0, len(mask), 2):
-        for x in xrange(y0, len(mask[y]), 2):
+    for y in xrange(x0, h, 2):
+        for x in xrange(y0, w, 2):
             checked += 1
             if mask[y][x]:
                 min_x = int(max(0, math.floor(x + bb[0][0])))
@@ -48,24 +71,46 @@ def FindLocation(mask, shape, min_overlap_ratio=0.97):
     if locations == []:
         print 'There are no locations'
         return None
-    index = int(math.floor(random.random() * len(locations)))
+    index = int(math.floor(rand() * len(locations)))
     return locations[index]
 
 def ClearMask(mask, shape):
-    shape.r += 1
+    shape.r += 0.5
     bb = shape.GetBoundingBox()
-    min_x = int(math.floor(bb[0][0]))
-    min_y = int(math.floor(bb[0][1]))
-    max_x = int(math.ceil(bb[1][0]))
-    max_y = int(math.ceil(bb[1][1]))
-
-    cleared = 0
+    h = len(mask)
+    w = len(mask[0])
+    min_x = max(0, int(math.floor(bb[0][0])))
+    min_y = max(0, int(math.floor(bb[0][1])))
+    max_x = min(w, int(math.ceil(bb[1][0])))
+    max_y = min(h, int(math.ceil(bb[1][1])))
     for y in xrange(min_y, max_y):
         for x in xrange(min_x, max_x):
             if shape.IsInside(x, y):
                 mask[y][x] = 0    
-                cleared += 1
-    print cleared
+
+def SetColorFromImage(image, shape):
+    shape.r += 1
+    bb = shape.GetBoundingBox()
+    h = len(image)
+    w = len(image[0])
+    min_x = max(0, int(math.floor(bb[0][0])))
+    min_y = max(0, int(math.floor(bb[0][1])))
+    max_x = min(w, int(math.ceil(bb[1][0])))
+    max_y = min(h, int(math.ceil(bb[1][1])))
+
+    cleared = 0
+    colors = []
+    for y in xrange(min_y, max_y):
+        for x in xrange(min_x, max_x):
+            if shape.IsInside(x, y):
+                colors.append((
+                    float(image[y][x][0]),
+                    float(image[y][x][1]),
+                    float(image[y][x][2]))
+                )
+    index = int(math.floor(rand() * len(colors)))
+    shape.color = colors[index]
+    print shape.color
     
 def main():
     """
@@ -80,12 +125,12 @@ def main():
             for y in xrange(0, image_height)]
     for y in xrange(0, len(mask)):
         for x in xrange(0, len(mask[y])):
-            mask[y][x] = image[y][x][0] > 0
+            mask[y][x] = image[y][x][0] > 0 or image[y][x][1] > 0 or image[y][x][2] > 0
     #plt.imshow(mask)
     #plt.show(block=True)
     
-    min_radius = 3
-    max_radius = 20
+    min_radius = 1
+    max_radius = 2.5
 
     surface = cairo.SVGSurface(sys.argv[2], image_width, image_height)
     ctx = cairo.Context(surface)        
@@ -98,7 +143,7 @@ def main():
     #  - Exit if can't find some location.
     # 3) Clear those regions in the mask.
     # 4) Store circle in a list (and draw it)
-    for i in xrange(0, 1000):
+    for i in xrange(0, 100000):
         shape = GenerateRandomShape(min_radius, max_radius)
         location = FindLocation(mask, shape)
         if not location:
@@ -109,6 +154,7 @@ def main():
             break
         shape.x = location[0]
         shape.y = location[1]
+        SetColorFromImage(image, shape)
         
         shape.Draw(ctx)
 

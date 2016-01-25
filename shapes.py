@@ -1,15 +1,39 @@
 import math
 
+
 class Shape(object):
+    """A base class for a shape"""
     def __init__(self, x, y, color=(0,0,0)):
         self.x = x
         self.y = y
         self.color = color
+
+    def IsInside(self, x, y):
+        raise NotImplementedError
         
     def GetArea(self):
         raise NotImplementedError
 
+    def GetBoundingBox(self):
+        raise NotImplementedError
+
+    def Draw(self, ctx):
+        raise NotImplementedError
+
+    def InsideRegion(self, w, h):
+        bb = self.GetBoundingBox()
+        min_x = int(max(0, math.floor(bb[0][0])))
+        min_y = int(max(0, math.floor(bb[0][1])))
+        max_x = int(min(w, math.ceil(bb[1][0])))
+        max_y = int(min(h, math.ceil(bb[1][1])))
+        for y in xrange(min_y, max_y):
+            for x in xrange(min_x, max_x):
+                if self.IsInside(x, y):
+                    yield (x, y)
+
 class Circle(Shape):
+    """ A circle"""
+    
     def __init__(self, x, y, r, color=(0,0,0)):
         Shape.__init__(self, x, y, color)
         self.r = r
@@ -32,17 +56,19 @@ class Circle(Shape):
         ctx.fill()
         
     def __str__(self):
-        return 'position = (%d, %d), radius = %f' % (self.x, self.y, self.r)
+        return 'Circle @ (%d, %d), radius = %f' % (self.x, self.y, self.r)
 
 
 class Square(Shape):
+    """A square."""
     def __init__(self, x, y, r, color=(0,0,0)):
         Shape.__init__(self, x, y, color)
         self.r = r
         
     def IsInside(self, x, y):
         r = self.r
-        return (x >= self.x - r) and (x <= self.x + r) and (y >= self.y - r) and (y <= self.y + r)
+        return ((x >= self.x - r) and (x <= self.x + r) and
+                (y >= self.y - r) and (y <= self.y + r))
             
     def GetArea(self):
         return 4 * self.r * self.r
@@ -63,4 +89,4 @@ class Square(Shape):
         ctx.fill()
         
     def __str__(self):
-        return 'position = (%d, %d), radius = %f' % (self.x, self.y, self.r)
+        return 'Square @ (%d, %d), radius = %f' % (self.x, self.y, self.r)

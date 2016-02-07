@@ -4,6 +4,7 @@ assign the shapes a color based on the input image or some
 specified set of colors.
 """
 import math
+import utils
 from shapes import *
 from optparse import OptionParser
 import sys
@@ -12,6 +13,7 @@ import cairo
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 from random import random as rand
+from scipy.spatial import Delaunay
 
 
 def GenerateRandomShape(min_radius, max_radius, class_type=Circle):
@@ -143,6 +145,48 @@ def FillMaskWithShapes(mask, generate_shape, set_color, min_radius=1., max_radiu
         shapes.append(shape)
     return shapes
 
+def SmoothPoints(points, neighbors):
+    new_points = [[0, 0] for i in xrange(0, len(points))]
+    for i in xrange(0, len(points)):
+        for j in neighbors[i]:
+            new_points[i][0] += points[j][0]
+            new_points[i][1] += points[j][1]
+        new_points[i][0] /= len(neighbors[i])
+        new_points[i][1] /= len(neighbors[i])
+    return new_points
+
+def DelaunayTriangulation(mask, generate_shape, set_color, min_radius, max_radius):
+    w, h = len(mask[0]), len(mask)
+    npoints = 1000
+    points = [(rand() * w, rand() * h) for i in xrange(0, npoints)]
+    inside_points = []
+    for point in points:
+        y = int(math.floor(point[1]))
+        x = int(math.floor(point[0]))
+        if mask[y][x]:
+            inside_points.append(point)
+    points = inside_points
+    triangles = Delaunay(points)
+    neighbors = [set() for point in points]
+    for i in xrange(0, len(triangles.simplices)):
+        tri = triangles.simplices[i]
+        for k in xrange(0, 3):
+            neighbors[tri[k]].add(tri[(k + 1) % 3])
+            neighbors[tri[k]].add(tri[(k + 2) % 3])
+
+    for i in xrange(0, 5):
+        points = SmoothPoints(points, neighbors)    
+            
+    shapes = []
+    for i in xrange(0, len(neighbors)):
+        min_distance = w + h
+        for j in neighbors[i]:
+            min_distance = min(min_distance,
+                               utils.Vec2Distance(points[i], points[j]))
+        radius = min_distance / 2
+        shapes.append(Circle(points[i][0], points[i][1], radius))
+
+    return shapes
         
 def main():
     usage = "usage: %prog [options] input_file output_file"
@@ -156,6 +200,10 @@ def main():
     parser.add_option("-s", "--square", 
                       dest="square", default=False,
                       help="Use squares (instead of circles")
+    parser.add_option("-t", "--triangle",
+                      dest="triangle", default=False,
+                      help="Use delaunay triangulation")
+                    
     (options, args) = parser.parse_args()
     print options, args
     if len(args) < 2:
@@ -173,10 +221,17 @@ def main():
             mask[y][x] = image[y][x][0] > 0 or image[y][x][1] > 0 or image[y][x][2] > 0
     
     set_color = lambda x: SetColorFromImage(image, x)
+
     if options.square:
         generate_shape = lambda n, x: GenerateRandomShape(n, x, class_type=Square)
     else:
         generate_shape = lambda n, x: GenerateRandomShape(n, x, class_type=Circle)
+    if options.triangle:
+        shapes = DelaunayTriangulation(mask, generate_shape, set_color,
+                                       options.min_radius, options.max_radius)
+        WriteShapes(output_path, shapes, width, height)
+        sys.exit(1)
+        
     shapes = FillMaskWithShapes(mask, generate_shape, set_color,
                                 options.min_radius, options.max_radius)
     WriteShapes(output_path, shapes, width, height)

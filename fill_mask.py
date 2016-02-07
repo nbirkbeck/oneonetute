@@ -32,6 +32,16 @@ def GenerateRandomShape(min_radius, max_radius, class_type=Circle):
     return class_type(0, 0, r, (rand(), rand(), rand()))
 
 
+def MeetsOverlapConstraint(shape, mask, min_overlap_ratio=0.97):
+    w, h = len(mask[0]), len(mask)
+    overlap_area, shape_area = 0.0, 0.0
+    for point in shape.InsideRegion(w, h):
+        shape_area += 1
+        if mask[point[1]][point[0]]:
+            overlap_area += 1
+    if shape_area <= 0: return False
+    return overlap_area / shape_area >= min_overlap_ratio
+
 def FindLocation(mask, shape, min_overlap_ratio=0.97, use_first_location=True):
     """
     Finds a location to place the shape using the mask as the valid regions.
@@ -53,14 +63,8 @@ def FindLocation(mask, shape, min_overlap_ratio=0.97, use_first_location=True):
         for x in xrange(int(rand() * 2), w, 2):
             checked += 1
             if mask[y][x]:
-                overlap_area, shape_area = 0.0, 0.0
                 shape.x, shape.y = x, y
-                for point in shape.InsideRegion(w, h):
-                    shape_area += 1
-                    if mask[point[1]][point[0]]:
-                        overlap_area += 1
-                
-                if overlap_area / shape_area >= min_overlap_ratio:
+                if MeetsOverlapConstraint(shape, mask, min_overlap_ratio):
                     if use_first_location:
                         return (x, y)
                     locations.append((x, y))
@@ -148,24 +152,19 @@ def FillMaskWithShapes(mask, generate_shape, set_color, min_radius=1., max_radiu
 def SmoothPoints(points, neighbors):
     new_points = [[0, 0] for i in xrange(0, len(points))]
     for i in xrange(0, len(points)):
+        new_points[i][0] = points[i][0]
+        new_points[i][1] = points[i][1]
         for j in neighbors[i]:
             new_points[i][0] += points[j][0]
             new_points[i][1] += points[j][1]
-        new_points[i][0] /= len(neighbors[i])
-        new_points[i][1] /= len(neighbors[i])
+        new_points[i][0] /= (len(neighbors[i]) + 1)
+        new_points[i][1] /= (len(neighbors[i]) + 1)
     return new_points
 
 def DelaunayTriangulation(mask, generate_shape, set_color, min_radius, max_radius):
     w, h = len(mask[0]), len(mask)
-    npoints = 1000
+    npoints = 10000
     points = [(rand() * w, rand() * h) for i in xrange(0, npoints)]
-    inside_points = []
-    for point in points:
-        y = int(math.floor(point[1]))
-        x = int(math.floor(point[0]))
-        if mask[y][x]:
-            inside_points.append(point)
-    points = inside_points
     triangles = Delaunay(points)
     neighbors = [set() for point in points]
     for i in xrange(0, len(triangles.simplices)):
@@ -174,19 +173,33 @@ def DelaunayTriangulation(mask, generate_shape, set_color, min_radius, max_radiu
             neighbors[tri[k]].add(tri[(k + 1) % 3])
             neighbors[tri[k]].add(tri[(k + 2) % 3])
 
-    for i in xrange(0, 5):
+    for i in xrange(0, 10):
         points = SmoothPoints(points, neighbors)    
-            
+    
     shapes = []
     for i in xrange(0, len(neighbors)):
-        min_distance = w + h
+        min_distance = float(w + h)
         for j in neighbors[i]:
             min_distance = min(min_distance,
                                utils.Vec2Distance(points[i], points[j]))
         radius = min_distance / 2
-        shapes.append(Circle(points[i][0], points[i][1], radius))
+        circle = Circle(points[i][0], points[i][1], radius)
+        set_color(circle)
+        shapes.append(circle)
 
-    return shapes
+    for i in xrange(0, len(neighbors)):
+        min_distance = float(w + h)
+        for j in neighbors[i]:
+            min_distance = min(min_distance,
+                               utils.Vec2Distance(points[i], points[j]) - shapes[j].r)
+        shapes[i].r = min_distance  - 0.04
+
+    final_shapes = []
+    for circle in shapes:
+        if MeetsOverlapConstraint(circle, mask):
+            final_shapes.append(circle)
+
+    return final_shapes
         
 def main():
     usage = "usage: %prog [options] input_file output_file"

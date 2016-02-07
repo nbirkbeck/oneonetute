@@ -86,7 +86,7 @@ def ClearMask(mask, shape, padding=1.):
     shape.r += padding
     for point in shape.InsideRegion(len(mask[0]), len(mask)):
         mask[point[1]][point[0]] = 0    
-
+    shape.r -= padding
 
 def SetColorFromImage(image, shape):
     """
@@ -226,6 +226,7 @@ def main():
         generate_shape = lambda n, x: GenerateRandomShape(n, x, class_type=Square)
     else:
         generate_shape = lambda n, x: GenerateRandomShape(n, x, class_type=Circle)
+        
     if options.triangle:
         shapes = DelaunayTriangulation(mask, generate_shape, set_color,
                                        options.min_radius, options.max_radius)

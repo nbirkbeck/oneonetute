@@ -31,6 +31,7 @@ class Shape(object):
                 if self.IsInside(x, y):
                     yield (x, y)
 
+
 class Circle(Shape):
     """ A circle"""
     

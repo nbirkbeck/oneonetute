@@ -42,7 +42,7 @@ def MeetsOverlapConstraint(shape, mask, min_overlap_ratio=0.97):
     if shape_area <= 0: return False
     return overlap_area / shape_area >= min_overlap_ratio
 
-def FindLocation(mask, shape, min_overlap_ratio=0.97, use_first_location=True):
+def FindLocation(mask, shape, start_pos=(0, 0), min_overlap_ratio=0.97, use_first_location=True):
     """
     Finds a location to place the shape using the mask as the valid regions.
     
@@ -59,8 +59,9 @@ def FindLocation(mask, shape, min_overlap_ratio=0.97, use_first_location=True):
     checked = 0
     w, h = len(mask[0]), len(mask)
     
-    for y in xrange(int(rand() * 2), h, 2):
-        for x in xrange(int(rand() * 2), w, 2):
+    for y in xrange(start_pos[1] + int(rand() * 2 - 1), h, 2):
+        x_start = start_pos[0] if y == start_pos[1] else 0
+        for x in xrange(x_start, w, 2):
             checked += 1
             if mask[y][x]:
                 shape.x, shape.y = x, y
@@ -78,7 +79,7 @@ def FindLocation(mask, shape, min_overlap_ratio=0.97, use_first_location=True):
     return locations[index]
 
 
-def ClearMask(mask, shape, padding=1.):
+def ClearMask(mask, shape, padding=0.1):
     """
     Clears the region in the mask that is occupied by the shape.
     
@@ -130,14 +131,16 @@ def FillMaskWithShapes(mask, generate_shape, set_color, min_radius=1., max_radiu
     4) Store circle in a list (and draw it)
     """
     shapes = []
+    location = (0, 0)
     for i in xrange(0, 100000):
         shape = generate_shape(min_radius, max_radius)
-        location = FindLocation(mask, shape)
+        location = FindLocation(mask, shape, location)
         if not location:
             if max_radius > min_radius + 1:
                 old_max = max_radius
                 max_radius = (min_radius * 0.2 + max_radius * 0.8)
                 print 'Shrinking max circle from %f to %f' % (old_max, max_radius)
+                location = (0, 0)
                 continue
             break
 
@@ -173,7 +176,7 @@ def DelaunayTriangulation(mask, generate_shape, set_color, min_radius, max_radiu
             neighbors[tri[k]].add(tri[(k + 1) % 3])
             neighbors[tri[k]].add(tri[(k + 2) % 3])
 
-    for i in xrange(0, 10):
+    for i in xrange(0, 1):
         points = SmoothPoints(points, neighbors)    
     
     shapes = []
@@ -218,21 +221,19 @@ def main():
                       help="Use delaunay triangulation")
                     
     (options, args) = parser.parse_args()
+    options.min_radius = float(options.min_radius)
+    options.max_radius = float(options.max_radius)
     print options, args
     if len(args) < 2:
         print usage
         return -1
 
+    print 'Reading images'
     image_path = args[0]
     output_path = args[1]
     image = mpimg.imread(image_path)
     width, height = len(image[0]), len(image)
-    mask = [[0 for x in xrange(0, width)]
-            for y in xrange(0, height)]
-    for y in xrange(0, len(mask)):
-        for x in xrange(0, len(mask[y])):
-            mask[y][x] = image[y][x][0] > 0 or image[y][x][1] > 0 or image[y][x][2] > 0
-    
+    mask = image[:,:,0] > 0 #+ image[:,:,1] > 0 + image[:,:,2]
     set_color = lambda x: SetColorFromImage(image, x)
 
     if options.square:
@@ -241,13 +242,15 @@ def main():
         generate_shape = lambda n, x: GenerateRandomShape(n, x, class_type=Circle)
         
     if options.triangle:
+        print 'Running del'
         shapes = DelaunayTriangulation(mask, generate_shape, set_color,
                                        options.min_radius, options.max_radius)
-        WriteShapes(output_path, shapes, width, height)
-        sys.exit(1)
-        
-    shapes = FillMaskWithShapes(mask, generate_shape, set_color,
-                                options.min_radius, options.max_radius)
+        for shape in shapes:
+            ClearMask(mask, shape)
+    else:
+        shapes = []
+    shapes += FillMaskWithShapes(mask, generate_shape, set_color,
+                                 options.min_radius, options.max_radius)
     WriteShapes(output_path, shapes, width, height)
 
 
